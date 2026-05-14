@@ -1,0 +1,31 @@
+name: build
+run-name: Build xt_tls
+on: [pull_request, push]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt install linux-headers-$(uname -r) libxtables-dev
+      - name: Build kernel module
+        run: make -C src
+      - name: Build xtables extension
+        run: make -C ipt
+      - name: Install
+        run: sudo make install
+      - name: "Test: Add iptables host rule"
+        run: sudo iptables -A OUTPUT -p tcp --dport 443 -m tls --tls-host github.com -j ACCEPT
+      - name: "Test: Add iptables hostset rule"
+        run: sudo iptables -A OUTPUT -p tcp --dport 443 -m tls --tls-hostset testlist -j ACCEPT
+      - name: "Test: Add domains to hostset"
+        run: echo +google.com | sudo tee /proc/net/xt_tls/hostset/testlist
+      - name: "Test: Retrieve github.com"
+        run: curl -v -o/dev/null https://github.com
+      - name: "Test: Retrieve google.com"
+        run: curl -v -o/dev/null https://google.com
+      - name: "Test: Show iptables rules"
+        run: sudo iptables -L -v
